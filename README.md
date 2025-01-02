@@ -1,54 +1,105 @@
-# Remotion video
+# Genuary 2025 - P5.js + React + Remotion
 
-<p align="center">
-  <a href="https://github.com/remotion-dev/logo">
-    <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="https://github.com/remotion-dev/logo/raw/main/animated-logo-banner-dark.gif">
-      <img alt="Animated Remotion Logo" src="https://github.com/remotion-dev/logo/raw/main/animated-logo-banner-light.gif">
-    </picture>
-  </a>
-</p>
+Daily creative coding sketches for Genuary 2025, built with P5.js, React, and Remotion for video export.
 
-Welcome to your Remotion project!
+## About
 
-## Commands
+This repository contains my submissions for [Genuary 2025](https://genuary.art/), a month-long creative coding challenge. Each sketch is built using:
 
-**Install Dependencies**
+- P5.js for creative coding
+- React for component architecture
+- Remotion for high-quality video export
 
-```console
-npm i
+## Project Structure
+
+```
+/src
+  /components
+    /sketches          # Daily P5.js sketches
+    /compositions      # Remotion video compositions
+  /utils              # Helper functions
+  /constants          # Configuration and constants
 ```
 
-**Start Preview**
+## Setup
 
-```console
+1. Clone the repository:
+
+```bash
+git clone https://github.com/yourusername/genuary2025
+cd genuary2025
+```
+
+2. Install dependencies:
+
+```bash
+npm install
+```
+
+## Development
+
+Run the development server:
+
+```bash
 npm run dev
 ```
 
-**Render video**
+## Creating Sketches
 
-```console
-npx remotion render
+1. Create a new P5.js sketch in `/src/components/sketches`
+2. Create a Remotion composition in `/src/components/compositions`
+3. Add your composition to `src/Video.tsx`
+
+Example sketch structure:
+
+```jsx
+import { useEffect } from "react";
+import p5 from "p5";
+
+const Sketch = () => {
+  useEffect(() => {
+    const s = (p) => {
+      p.setup = () => {
+        // Setup code
+      };
+
+      p.draw = () => {
+        // Draw code
+      };
+    };
+
+    new p5(s);
+  }, []);
+
+  return <div id="sketch-container" />;
+};
 ```
 
-**Upgrade Remotion**
+## Rendering Videos
 
-```console
-npx remotion upgrade
+1. Set up your composition in `Video.tsx`:
+
+```jsx
+<Composition
+  id="sketch-name"
+  component={SketchComponent}
+  durationInFrames={150}
+  fps={30}
+  width={1920}
+  height={1080}
+/>
 ```
 
-## Docs
+2. Render the video:
 
-Get started with Remotion by reading the [fundamentals page](https://www.remotion.dev/docs/the-fundamentals).
+```bash
+npm run build
+```
 
-## Help
+## Contributing
 
-We provide help on our [Discord server](https://discord.gg/6VzzNDwUwV).
-
-## Issues
-
-Found an issue with Remotion? [File an issue here](https://github.com/remotion-dev/remotion/issues/new).
+Feel free to fork and submit pull requests. Please follow the existing code style.
 
 ## License
 
-Note that for some entities a company license is needed. [Read the terms here](https://github.com/remotion-dev/remotion/blob/main/LICENSE.md).
+MIT License. See LICENSE file for details.
