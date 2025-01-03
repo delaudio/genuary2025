@@ -48,7 +48,7 @@ npm run dev
 
 1. Create a new P5.js sketch in `/src/components/sketches`
 2. Create a Remotion composition in `/src/components/compositions`
-3. Add your composition to `src/Video.tsx`
+3. Add your composition to `src/Root.tsx`
 
 Example sketch structure:
 
@@ -77,7 +77,7 @@ const Sketch = () => {
 
 ## Rendering Videos
 
-1. Set up your composition in `Video.tsx`:
+1. Set up your composition in `Root.tsx`:
 
 ```jsx
 <Composition
@@ -93,8 +93,10 @@ const Sketch = () => {
 2. Render the video:
 
 ```bash
-npm run build
+npm run dev
 ```
+
+Render the composition you want from the sidebar
 
 ## Contributing
 
