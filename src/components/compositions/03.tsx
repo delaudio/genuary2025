@@ -7,9 +7,9 @@ export default function Composition030124() {
     <Composition
       id="03-January"
       component={P5Sketch030124}
-      durationInFrames={300}
-      fps={30}
-      width={1920}
+      durationInFrames={500}
+      fps={60}
+      width={1080}
       height={1080}
       schema={myCompSchema2}
       defaultProps={{
