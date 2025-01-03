@@ -7,7 +7,7 @@ export default function Composition030124() {
     <Composition
       id="03-January"
       component={P5Sketch030124}
-      durationInFrames={500}
+      durationInFrames={505}
       fps={60}
       width={1080}
       height={1080}
