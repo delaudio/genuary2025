@@ -6,14 +6,18 @@
   "license": "UNLICENSED",
   "private": true,
   "dependencies": {
+    "@react-three/drei": "^9.120.5",
+    "@react-three/fiber": "^8.17.10",
     "@remotion/cli": "^4.0.244",
     "@remotion/tailwind": "4.0.244",
+    "@remotion/three": "^4.0.244",
     "@remotion/zod-types": "4.0.244",
     "p5": "^1.9.1",
-    "react-dom": "19.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
     "react-p5": "^1.4.1",
-    "react": "19.0.0",
     "remotion": "4.0.244",
+    "three": "^0.172.0",
     "zod": "3.22.3"
   },
   "devDependencies": {
