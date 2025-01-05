@@ -6,12 +6,10 @@ const BASE_SCALE = 1;
 let gridTopX, gridTopY;
 
 // Audio analysis data
-let currentFrame = 0;
+let frameNumber = 0; // This will be set from outside
 let bassLevel = 0;
 let midLevel = 0;
 let highLevel = 0;
-let lastFrameTime = 0;
-const frameInterval = 1000 / 30; // 30fps
 
 const colorPalette = [
   { r: 90, g: 90, b: 90 }, // Dark gray
@@ -155,16 +153,20 @@ function setup() {
   gridTopY = height / 2;
   generatePattern();
   console.log("Setup complete");
-  lastFrameTime = millis();
 }
 
 function updateAudioLevels() {
   if (!window.audioData) return;
 
-  // Ensure we don't go beyond the audio data length
-  currentFrame = min(currentFrame, window.audioData.length - 1);
+  // Use the exact frame number from the renderer
+  if (typeof window.frameNumber !== "undefined") {
+    frameNumber = window.frameNumber;
+  }
 
-  const frame = window.audioData[currentFrame];
+  // Ensure we don't go beyond the audio data length
+  frameNumber = min(frameNumber, window.audioData.length - 1);
+
+  const frame = window.audioData[frameNumber];
   if (frame) {
     bassLevel = frame.bass;
     midLevel = frame.mid;
@@ -177,17 +179,6 @@ function updateAudioLevels() {
 }
 
 function draw() {
-  // Strict frame timing
-  const currentTime = millis();
-  if (currentTime - lastFrameTime < frameInterval) {
-    return; // Skip this frame if not enough time has passed
-  }
-
-  // Update frame counter based on exact timing
-  const elapsedFrames = floor((currentTime - lastFrameTime) / frameInterval);
-  currentFrame += elapsedFrames;
-  lastFrameTime = currentTime;
-
   updateAudioLevels();
 
   background(85, 85, 85);
