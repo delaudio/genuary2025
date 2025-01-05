@@ -68,8 +68,8 @@ async function renderAnimation(durationInSeconds = 15, fps = 30) {
   for (let i = 0; i < totalFrames; i++) {
     // Set exact frame number and capture frame
     await page.evaluate((frameNum) => {
+      window.frameNumber = frameNum;
       return new Promise((resolve) => {
-        window.frameNumber = frameNum;
         window.requestAnimationFrame(() => {
           const canvas = document.querySelector("canvas");
           window.frameData = canvas.toDataURL("image/png");
