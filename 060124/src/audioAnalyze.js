@@ -164,4 +164,4 @@ function averageValues(frames, key) {
 }
 
 // Run the analysis
-analyzeAudio("caterina.wav", 30, 15).catch(console.error);
+analyzeAudio("gigi.wav", 30, 15).catch(console.error);
