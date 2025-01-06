@@ -106,7 +106,7 @@ async function renderAnimation(durationInSeconds = 15, fps = 30) {
   // Combine frames into video
   console.log("Rendering final video...");
   const outputPath = path.join(outputDir, "output.mp4");
-  const audioPath = path.join(__dirname, "caterina.wav");
+  const audioPath = path.join(__dirname, "gigi.wav");
   const finalOutputPath = path.join(outputDir, "final_output.mp4");
 
   try {
