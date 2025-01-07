@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+  </head>
+  <body style="margin: 0; overflow: hidden; background: black">
+    <script>
+      const GRID_SIZE = 8;
+      let cellSize;
+      let shapes = [];
+
+      function setup() {
+        createCanvas(windowWidth, windowHeight);
+        cellSize = min(width, height) / GRID_SIZE;
+        initializeShapes();
+      }
+
+      function initializeShapes() {
+        shapes = [];
+        for (let i = 0; i < 64; i++) {
+          shapes.push({
+            x: floor(random(GRID_SIZE)) * cellSize + cellSize / 2,
+            y: floor(random(GRID_SIZE)) * cellSize + cellSize / 2,
+            size: cellSize,
+            isWhite: random() > 0.5,
+            angle: random([0, HALF_PI, PI, PI + HALF_PI]),
+            speed: 3,
+            nextMoveTime: 0,
+          });
+        }
+      }
+
+      function draw() {
+        background(0);
+        drawGrid();
+
+        shapes.forEach((shape) => {
+          if (!shape.isWhite) drawShape(shape);
+        });
+
+        shapes.forEach((shape) => {
+          if (shape.isWhite) drawShape(shape);
+        });
+
+        blendMode(DIFFERENCE);
+        shapes.forEach((shape) => {
+          drawShape(shape);
+        });
+        blendMode(BLEND);
+
+        shapes.forEach((shape) => {
+          if (millis() > shape.nextMoveTime) {
+            shape.angle = random([0, HALF_PI, PI, PI + HALF_PI]);
+            shape.nextMoveTime = millis() + random(1000, 2000);
+          }
+
+          shape.x += cos(shape.angle) * shape.speed;
+          shape.y += sin(shape.angle) * shape.speed;
+
+          shape.x = (shape.x + width) % width;
+          shape.y = (shape.y + height) % height;
+        });
+      }
+
+      function drawShape(shape) {
+        fill(shape.isWhite ? 255 : 0);
+        noStroke();
+        rectMode(CENTER);
+        square(shape.x, shape.y, shape.size);
+      }
+
+      function drawGrid() {
+        stroke(30);
+        for (let i = 1; i < GRID_SIZE; i++) {
+          line(i * cellSize, 0, i * cellSize, height);
+          line(0, i * cellSize, width, i * cellSize);
+        }
+      }
+
+      function windowResized() {
+        resizeCanvas(windowWidth, windowHeight);
+        cellSize = min(width, height) / GRID_SIZE;
+        initializeShapes();
+      }
+    </script>
+  </body>
+</html>
