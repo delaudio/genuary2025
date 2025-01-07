@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+      body {
+        margin: 0;
+        background: black;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+      }
+    </style>
+    <!-- Add Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
+  </head>
+  <body>
+    <div id="container"></div>
+    <script>
+      // Add this to signal when the page is ready
+      window.pageLoaded = false;
+      window.addEventListener("load", () => {
+        window.pageLoaded = true;
+      });
+    </script>
+    <script src="sketch.js"></script>
+  </body>
+</html>
