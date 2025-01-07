@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <style>
+      body {
+        margin: 0;
+        padding: 20px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background-color: black;
+        min-height: 100vh;
+        box-sizing: border-box;
+      }
+      #canvas-container {
+        width: min(100vw - 40px, 100vh - 40px);
+        height: min(100vw - 40px, 100vh - 40px);
+        max-width: 1080px;
+        max-height: 1080px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="canvas-container"></div>
+    <script>
+      let size;
+      const GRID_SIZE = 32;
+      let matrix = [];
+      let currentIndex = 0;
+      const TOTAL_CELLS = GRID_SIZE * GRID_SIZE;
+      const ANIMATION_DURATION = 15;
+      const FRAME_RATE = 30;
+      const TOTAL_FRAMES = ANIMATION_DURATION * FRAME_RATE;
+      let frameCounter = 0;
+      let audioData = [];
+      let currentAudioFrame = 0;
+
+      const CHARS = [
+        "¥",
+        "€",
+        "£",
+        "¢",
+        "₿",
+        "§",
+        "©",
+        "®",
+        "™",
+        "°",
+        "±",
+        "×",
+        "÷",
+        "≠",
+        "≈",
+        "≤",
+        "≥",
+        "∞",
+        "∑",
+        "∏",
+        "∆",
+        "√",
+        "∫",
+        "⌐",
+        "¬",
+        "∧",
+        "∨",
+        "∩",
+        "∪",
+        "∼",
+        "∃",
+        "∀",
+        "∂",
+        "∇",
+        "∈",
+        "∉",
+        "∊",
+        "∋",
+        "∌",
+        "∍",
+        "∎",
+        "∏",
+        "∐",
+        "∑",
+        "−",
+        "∓",
+        "∔",
+        "∕",
+        "∖",
+        "∗",
+        "∘",
+        "∙",
+        "√",
+        "∛",
+        "∜",
+        "∝",
+        "∞",
+        "∟",
+        "∠",
+        "∡",
+        "µ",
+        "Ω",
+        "π",
+        "∴",
+        "∵",
+        "∶",
+        "∷",
+        "∸",
+        "∹",
+        "∺",
+        "∻",
+        "∼",
+        "∽",
+        "∾",
+        "∿",
+        "≀",
+        "≁",
+        "≂",
+        "≃",
+        "≄",
+        "≅",
+        "≆",
+        "≇",
+        "≈",
+        "≉",
+        "≊",
+        "≋",
+        "≌",
+        "≍",
+        "≎",
+        "⊕",
+        "⊖",
+        "⊗",
+        "⊘",
+        "⊙",
+        "⊚",
+        "⊛",
+        "⊜",
+        "⊝",
+        "⊞",
+        "⊟",
+        "⊠",
+        "⊡",
+        "⊢",
+        "⊣",
+      ];
+
+      function getRandomChar() {
+        return CHARS[Math.floor(Math.random() * CHARS.length)];
+      }
+
+      function setup() {
+        size = min(windowWidth - 40, windowHeight - 40, 1080);
+        const canvas = createCanvas(size, size);
+        canvas.parent("canvas-container");
+        textFont("Courier");
+        frameRate(FRAME_RATE);
+
+        audioData = Array.from({ length: TOTAL_FRAMES }, (_, frame) => ({
+          frame,
+          time: frame / FRAME_RATE,
+          bass: Math.sin(frame * 0.1) * 0.5 + 0.5,
+          mid: Math.sin(frame * 0.15 + 1) * 0.5 + 0.5,
+          high: Math.sin(frame * 0.2 + 2) * 0.5 + 0.5,
+        }));
+
+        initMatrix();
+      }
+
+      function initMatrix() {
+        matrix = [];
+        frameCounter = 0;
+        currentIndex = 0;
+        currentAudioFrame = 0;
+
+        for (let i = 0; i < GRID_SIZE; i++) {
+          for (let j = 0; j < GRID_SIZE; j++) {
+            matrix.push({
+              char: getRandomChar(),
+              x: i,
+              y: j,
+              visible: true,
+            });
+          }
+        }
+        matrix = matrix.sort(() => Math.random() - 0.5);
+      }
+
+      function windowResized() {
+        size = min(windowWidth - 40, windowHeight - 40, 1080);
+        resizeCanvas(size, size);
+      }
+
+      function draw() {
+        frameCounter++;
+        background(0);
+
+        currentAudioFrame = floor(frameCounter / (FRAME_RATE / 30));
+        const audio = audioData[currentAudioFrame] || {
+          bass: 0,
+          mid: 0,
+          high: 0,
+        };
+
+        const bassIntensity = audio.bass || 0;
+        const midIntensity = audio.mid || 0;
+        const highIntensity = audio.high || 0;
+
+        const cellSize = (size - 40) / GRID_SIZE;
+        textSize(cellSize * 0.7);
+        textAlign(CENTER, CENTER);
+
+        if (currentIndex < TOTAL_CELLS && frameCounter % 1 === 0) {
+          matrix[currentIndex].visible = false;
+          currentIndex++;
+        }
+
+        for (let cell of matrix) {
+          if (!cell.visible) continue;
+
+          const x = 20 + cell.x * cellSize + cellSize / 2;
+          const y = 20 + cell.y * cellSize + cellSize / 2;
+
+          const centerX = size / 2;
+          const centerY = size / 2;
+          const distToCenter = dist(x, y, centerX, centerY) / (size / 2);
+
+          let greyValue;
+          if (distToCenter < 0.33) {
+            greyValue = 255 * (1 - bassIntensity);
+          } else if (distToCenter > 0.66) {
+            greyValue = 255 * (1 - highIntensity);
+          } else {
+            greyValue = 255 * (1 - midIntensity);
+          }
+
+          fill(greyValue);
+          text(cell.char, x, y);
+        }
+
+        if (frameCounter >= TOTAL_FRAMES) {
+          initMatrix();
+        }
+      }
+    </script>
+  </body>
+</html>
