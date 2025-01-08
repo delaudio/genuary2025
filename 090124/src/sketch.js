@@ -8,10 +8,11 @@ function setup() {
   createCanvas(1080, 1080);
   frameRate(30);
 
+  // Ensure colors are valid
   colors = [
-    color(0), // Pure black
-    color(20), // Very dark gray
-    color(40), // Dark gray
+    color(0) || color(0), // Fallback to black if color creation fails
+    color(20) || color(20), // Very dark gray
+    color(40) || color(40), // Dark gray
   ];
 
   // Initialize color grid with exact dimensions
@@ -21,7 +22,15 @@ function setup() {
   for (let y = 0; y < rows; y++) {
     patternColors[y] = [];
     for (let x = 0; x < cols; x++) {
-      patternColors[y][x] = random(colors);
+      let selectedColor = random(colors);
+      // Fallback to first color if random selection somehow returns invalid color
+      if (
+        !selectedColor ||
+        (selectedColor._array && selectedColor._array.some(isNaN))
+      ) {
+        selectedColor = colors[0];
+      }
+      patternColors[y][x] = selectedColor;
     }
   }
 }
@@ -57,18 +66,28 @@ function drawPattern(x, y, size, baseColor, time, audioLevels) {
   // Calculate number of gradient steps based on audio level
   const audioIntensity =
     (audioLevels.bass + audioLevels.mid + audioLevels.high) / 3;
-  const minSteps = 1; // When audio is low, just show solid color
-  const maxSteps = 15; // When audio is high, show more gradient steps
+  const minSteps = 2;
+  const maxSteps = 15;
   const steps = floor(lerp(minSteps, maxSteps, audioIntensity));
 
   const stepSize = size / steps;
 
   for (let i = 0; i < steps; i++) {
-    const gradientPos = i / (steps - 1);
-    // Make gradient more pronounced when audio is higher
-    const gradientIntensity = gradientPos * audioIntensity;
+    // Avoid division by zero and handle NaN
+    let gradientPos = steps === 1 ? 0 : i / (steps - 1);
+    if (isNaN(gradientPos)) gradientPos = 0;
 
-    const stripeColor = lerpColor(baseColor, color(180), gradientIntensity);
+    let gradientIntensity = gradientPos * audioIntensity;
+    if (isNaN(gradientIntensity)) gradientIntensity = 0;
+
+    // Clamp the gradient intensity to avoid extreme values
+    const clampedIntensity = constrain(gradientIntensity, 0, 1);
+
+    // Fallback to base color if we get NaN in lerpColor
+    let stripeColor = lerpColor(baseColor, color(180), clampedIntensity);
+    if (stripeColor._array && stripeColor._array.some(isNaN)) {
+      stripeColor = baseColor; // Fallback to base color if any NaN values
+    }
 
     fill(stripeColor);
     rect(i * stepSize, 0, stepSize + 1, size);
