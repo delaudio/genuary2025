@@ -102,7 +102,7 @@ async function renderAnimation(durationInSeconds = 15, fps = 30) {
 
   // Render final video
   const outputPath = path.join(outputDir, "output.mp4");
-  const audioPath = path.join(__dirname, "mira.wav");
+  const audioPath = path.join(__dirname, "icefall.wav");
   const finalOutputPath = path.join(outputDir, "final_output.mp4");
 
   try {
