@@ -30,20 +30,20 @@ function initScene() {
     // Create a more structured initial distribution
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const layer = Math.floor(Math.random() * 5);
-      const baseRadius = 10 + layer * 8;
+      const baseRadius = 8 + layer * 6;
 
-      const radiusVariation = (Math.random() - 0.5) * 4;
+      const radiusVariation = (Math.random() - 0.5) * 2;
       const radius = baseRadius + radiusVariation;
 
-      const spiralTightness = 0.1;
-      const theta = (i / PARTICLE_COUNT) * Math.PI * 20 + layer * Math.PI * 0.5;
+      const spiralTightness = 0.05;
+      const theta = (i / PARTICLE_COUNT) * Math.PI * 15 + layer * Math.PI * 0.5;
       const spiralRadius = radius + theta * spiralTightness;
 
       positions[i * 3] = Math.cos(theta) * spiralRadius;
       positions[i * 3 + 1] = Math.sin(theta) * spiralRadius;
-      positions[i * 3 + 2] = (layer - 2) * 2;
+      positions[i * 3 + 2] = (layer - 2) * 1.5;
 
-      scales[i] = 0.05 + layer * 0.01 + Math.random() * 0.02;
+      scales[i] = 0.08 + layer * 0.02 + Math.random() * 0.01;
       frequencies[i] = 0.7 + layer * 0.1 + Math.random() * 0.3;
       phases[i] = theta + Math.random() * Math.PI;
     }
@@ -93,8 +93,8 @@ function initScene() {
             vec2 currentPattern, nextPattern;
             float phaseDiff1 = bass * PI * 2.0;
             float phaseDiff2 = mid * PI * 2.0;
-            float scale1 = 20.0 + bass * 25.0;
-            float scale2 = 20.0 + mid * 25.0;
+            float scale1 = 25.0 + bass * 30.0;
+            float scale2 = 25.0 + mid * 30.0;
             
             if(currentPhase < 1.0) {
                 currentPattern = lissajous(t, 1.0, 1.0, PI * 0.5) * scale1;
@@ -148,7 +148,7 @@ function initScene() {
             gl_Position = projectionMatrix * mvPosition;
             
             float sizeVariation = audioIntensity * audioIntensity + transitionImpulse * 0.5;
-            float size = scale * (0.05 + sizeVariation * 0.95) * (bass + mid + 0.1);
+            float size = scale * (0.1 + sizeVariation * 0.9) * (bass + mid + 0.15);
             float centerBoost = (1.0 - falloff) * 0.2;
             gl_PointSize = size * (20.0 / -mvPosition.z) * (1.0 - centerBoost);
         }
@@ -176,7 +176,7 @@ function initScene() {
             float brightness = 0.5 + (bass + mid) * 0.5;
             
             float totalIntensity = bass + mid;
-            float opacity = smoothstep(0.0, 0.2, totalIntensity) * 0.8;
+            float opacity = smoothstep(0.0, 0.2, totalIntensity) * 0.7;
             gl_FragColor = vec4(color * brightness, opacity);
         }
       `,
