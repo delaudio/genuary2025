@@ -119,7 +119,7 @@ function draw() {
   strokeWeight(baseStrokeWeight);
 
   // Draw vertical sewing lines
-  for (let x = FIXED_SIZE; x <= width - FIXED_SIZE; x += FIXED_SIZE) {
+  for (let x = FIXED_SIZE; x <= width; x += FIXED_SIZE) {
     for (let row = 0; row < rows; row++) {
       const y1 = row * FIXED_SIZE + 5;
       const y2 = (row + 1) * FIXED_SIZE - 5;
