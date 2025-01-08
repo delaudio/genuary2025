@@ -134,13 +134,13 @@ function initScene() {
             float falloff = smoothstep(1.0, 0.0, distanceFromCenter);
             
             float audioImpulse = abs(bass - mid) * 2.0;
-            float explosiveForce = (audioImpulse + transitionImpulse) * falloff * 20.0;
+            float explosiveForce = (audioImpulse + transitionImpulse) * falloff * 40.0;
             vec2 radialForce = normalize(pos.xy) * explosiveForce;
             
             pos.xy += blendedPattern * falloff;
             pos.xy += radialForce;
             
-            float zDisplacement = sin(t * 2.0) * cos(t) * 15.0 * audioIntensity * falloff;
+            float zDisplacement = sin(t * 2.0) * cos(t) * 25.0 * audioIntensity * falloff;
             zDisplacement += transitionImpulse * 10.0 * sin(t);
             pos.z += zDisplacement;
             
@@ -148,7 +148,7 @@ function initScene() {
             gl_Position = projectionMatrix * mvPosition;
             
             float sizeVariation = audioIntensity * audioIntensity + transitionImpulse * 0.5;
-            float size = scale * (0.2 + sizeVariation * 0.8);
+            float size = scale * (0.05 + sizeVariation * 0.95) * (bass + mid + 0.1);
             float centerBoost = (1.0 - falloff) * 0.2;
             gl_PointSize = size * (20.0 / -mvPosition.z) * (1.0 - centerBoost);
         }
@@ -175,7 +175,9 @@ function initScene() {
 
             float brightness = 0.5 + (bass + mid) * 0.5;
             
-            gl_FragColor = vec4(color * brightness, 0.8);
+            float totalIntensity = bass + mid;
+            float opacity = smoothstep(0.0, 0.2, totalIntensity) * 0.8;
+            gl_FragColor = vec4(color * brightness, opacity);
         }
       `,
       transparent: true,
