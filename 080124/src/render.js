@@ -70,16 +70,18 @@ async function renderAnimation(durationInSeconds = 15, fps = 30) {
 
   for (let i = 0; i < totalFrames; i++) {
     // Set frame number and render
-    await page.evaluate((frameNum) => {
+    await page.evaluate(async (frameNum) => {
       window.frameNumber = frameNum;
-      window.draw();
+      await window.draw(); // Wait for draw to complete
+
       return new Promise((resolve) => {
-        // Give a small delay for the render to complete
-        setTimeout(() => {
-          const canvas = document.querySelector("canvas");
-          window.frameData = canvas.toDataURL("image/png");
-          resolve();
-        }, 16); // ~60fps worth of delay
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            const canvas = document.querySelector("canvas");
+            window.frameData = canvas.toDataURL("image/png");
+            resolve();
+          });
+        });
       });
     }, i);
 
@@ -92,7 +94,6 @@ async function renderAnimation(durationInSeconds = 15, fps = 30) {
     await fs.writeFile(framePath, base64Data, "base64");
 
     if (i % 10 === 0) {
-      // Log every 10th frame to reduce console spam
       console.log(`Captured frame ${i + 1}/${totalFrames}`);
     }
   }
