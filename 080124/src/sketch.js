@@ -14,7 +14,10 @@ function initScene() {
     camera.position.z = 50;
 
     const container = document.getElementById("container");
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      preserveDrawingBuffer: true,
+    });
     renderer.setSize(1080, 1080);
     container.appendChild(renderer.domElement);
 
@@ -185,21 +188,21 @@ function initScene() {
       try {
         if (!window.audioData || typeof window.frameNumber === "undefined") {
           console.warn("Waiting for audio data...");
-          return false;
+          return Promise.reject("No audio data");
         }
 
         const frame = window.frameNumber;
         const currentFrame = window.audioData[frame % window.audioData.length];
 
-        material.uniforms.time.value = (frame / 30) * Math.PI; // Assuming 30fps
+        material.uniforms.time.value = (frame / 30) * Math.PI;
         material.uniforms.bass.value = currentFrame.bass;
         material.uniforms.mid.value = currentFrame.mid;
 
         renderer.render(scene, camera);
-        return true; // Signal successful render
+        return Promise.resolve(true);
       } catch (error) {
         console.error("Error in draw:", error);
-        return false;
+        return Promise.reject(error);
       }
     }
 
