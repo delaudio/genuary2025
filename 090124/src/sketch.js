@@ -48,14 +48,24 @@ function updateAudioLevels() {
 
 function getStringOffset(x, y, time, audioLevels) {
   const stringPos = x / width;
+
+  // Increase base amplitude from 4 to 8 or higher
   const amplitude =
-    4 *
+    8 *
     ((1 - stringPos) * audioLevels.bass +
-      sin(stringPos * PI) * audioLevels.mid +
+      // Add more pronounced sine wave influence with audio
+      sin(stringPos * PI * 2) * audioLevels.mid + // Doubled frequency of sine
       stringPos * audioLevels.high);
 
-  const freq = 1 + stringPos * 2;
-  return amplitude * sin(y * 0.01 + time * 0.1 + stringPos * PI);
+  // Make the oscillation more dynamic
+  return (
+    amplitude *
+    sin(
+      y * 0.02 + // Increased y influence
+        time * 0.15 + // Increased time influence for faster movement
+        stringPos * PI * 2 // Added more waviness across horizontal position
+    )
+  );
 }
 
 function drawPattern(x, y, size, baseColor, time, audioLevels) {
