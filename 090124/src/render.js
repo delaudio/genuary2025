@@ -9,7 +9,7 @@ async function renderAnimation(durationInSeconds = 15, fps = 30) {
   });
 
   const page = await browser.newPage();
-  await page.setViewport({ width: 1080, height: 1080 });
+  await page.setViewport({ width: 1080, height: 1920 });
 
   // Ensure directories exist
   const framesDir = path.join(__dirname, "..", "frames");
@@ -93,7 +93,7 @@ async function renderAnimation(durationInSeconds = 15, fps = 30) {
 
   // Render final video
   const outputPath = path.join(outputDir, "output.mp4");
-  const audioPath = path.join(__dirname, "mira.wav");
+  const audioPath = path.join(__dirname, "ecoli.wav");
   const finalOutputPath = path.join(outputDir, "final_output.mp4");
 
   try {

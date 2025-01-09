@@ -164,4 +164,4 @@ function averageValues(frames, key) {
 }
 
 // Run the analysis
-analyzeAudio("mira.wav", 30, 15).catch(console.error);
+analyzeAudio("ecoli.wav", 30, 15).catch(console.error);

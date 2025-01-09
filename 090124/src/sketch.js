@@ -5,7 +5,7 @@ const FIXED_SIZE = 50;
 let time = 0;
 
 function setup() {
-  createCanvas(1080, 1080);
+  createCanvas(1080, 1920);
   frameRate(30);
 
   // Ensure colors are valid
@@ -158,7 +158,7 @@ function draw() {
 }
 
 function windowResized() {
-  resizeCanvas(1080, 1080);
+  resizeCanvas(1080, 1920);
   const cols = width / FIXED_SIZE;
   const rows = height / FIXED_SIZE;
 
