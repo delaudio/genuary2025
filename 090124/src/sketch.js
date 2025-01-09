@@ -1,7 +1,7 @@
 let colors;
 let frame = 0;
 let patternColors = [];
-const FIXED_SIZE = 50;
+const FIXED_SIZE = 90;
 let time = 0;
 
 function setup() {
@@ -51,7 +51,7 @@ function getStringOffset(x, y, time, audioLevels) {
 
   // Increase base amplitude from 4 to 8 or higher
   const amplitude =
-    8 *
+    12 *
     ((1 - stringPos) * audioLevels.bass +
       // Add more pronounced sine wave influence with audio
       sin(stringPos * PI * 2) * audioLevels.mid + // Doubled frequency of sine
@@ -61,7 +61,7 @@ function getStringOffset(x, y, time, audioLevels) {
   return (
     amplitude *
     sin(
-      y * 0.02 + // Increased y influence
+      y * 0.015 + // Increased y influence
         time * 0.15 + // Increased time influence for faster movement
         stringPos * PI * 2 // Added more waviness across horizontal position
     )
