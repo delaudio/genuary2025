@@ -49,7 +49,7 @@ function updateAudioLevels() {
 function getStringOffset(x, y, time, audioLevels) {
   const stringPos = x / width;
 
-  // Increase base amplitude from 4 to 8 or higher
+  // Increase base amplitude from 12
   const amplitude =
     12 *
     ((1 - stringPos) * audioLevels.bass +
