@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <style>
+    body { margin: 0; }
+    #output_canvas { 
+      position: fixed;
+      width: 100vw;
+      height: 100vh;
+      background: black;
+    }
+    #video {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <video id="video" width="1280" height="720"></video>
+  <canvas id="output_canvas"></canvas>
+
+  <script>
+    const videoElement = document.getElementById('video');
+    const canvasElement = document.getElementById('output_canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+
+    // Define colors for each hand
+    const SABER_COLORS = ['#FF0000', '#0000FF'];
+
+    function onResults(results) {
+      canvasElement.width = window.innerWidth;
+      canvasElement.height = window.innerHeight;
+
+      canvasCtx.save();
+      canvasCtx.scale(-1, 1);
+      canvasCtx.translate(-canvasElement.width, 0);
+
+      canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+      if (results.multiHandLandmarks) {
+        results.multiHandLandmarks.forEach((landmarks, index) => {
+          // Draw hand connections
+          drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS,
+            {color: '#00FF00', lineWidth: 5});
+          drawLandmarks(canvasCtx, landmarks, {color: '#FF0000', lineWidth: 2});
+
+          const wrist = landmarks[0];
+          const screenX = wrist.x * canvasElement.width;
+          const screenY = wrist.y * canvasElement.height;
+
+          const middleFinger = landmarks[9];
+          const angle = Math.atan2(
+            middleFinger.y - wrist.y,
+            middleFinger.x - wrist.x
+          );
+
+          // Draw lightsaber with different color for each hand
+          canvasCtx.save();
+          canvasCtx.translate(screenX, screenY);
+          canvasCtx.rotate(angle - Math.PI/2);
+
+          const saberColor = SABER_COLORS[index % SABER_COLORS.length];
+
+          // Beam
+          canvasCtx.beginPath();
+          canvasCtx.moveTo(0, 0);
+          canvasCtx.lineTo(0, -300);
+          canvasCtx.strokeStyle = saberColor;
+          canvasCtx.lineWidth = 15;
+          canvasCtx.lineCap = 'round';
+          canvasCtx.shadowColor = saberColor;
+          canvasCtx.shadowBlur = 20;
+          canvasCtx.stroke();
+
+          // Handle
+          canvasCtx.beginPath();
+          canvasCtx.moveTo(0, 0);
+          canvasCtx.lineTo(0, 50);
+          canvasCtx.strokeStyle = '#808080';
+          canvasCtx.lineWidth = 10;
+          canvasCtx.shadowBlur = 0;
+          canvasCtx.stroke();
+
+          canvasCtx.restore();
+        });
+      }
+      canvasCtx.restore();
+    }
+
+    const hands = new Hands({
+      locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+      }
+    });
+
+    hands.setOptions({
+      maxNumHands: 2, // Changed to 2 for dual wielding
+      modelComplexity: 1,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+
+    hands.onResults(onResults);
+
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await hands.send({image: videoElement});
+      },
+      width: 1280,
+      height: 720
+    });
+
+    camera.start();
+  </script>
+</body>
+</html>
