@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script src="https://docs.opencv.org/4.7.0/opencv.js"></script>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { position: fixed; width: 100vw; height: 100vh; }
+    #video, #blob_canvas { display: none; }
+    #skeleton_canvas { pointer-events: none; }
+  </style>
+</head>
+<body>
+  <video id="video"></video>
+  <canvas id="webgl_canvas"></canvas>
+  <canvas id="skeleton_canvas"></canvas>
+  <canvas id="blob_canvas"></canvas>
+
+  <script>
+    const videoElement = document.getElementById('video');
+    const webglCanvas = document.getElementById('webgl_canvas');
+    const skeletonCanvas = document.getElementById('skeleton_canvas');
+    const blobCanvas = document.getElementById('blob_canvas');
+    const gl = webglCanvas.getContext('webgl');
+    const skeletonCtx = skeletonCanvas.getContext('2d');
+    const blobCtx = blobCanvas.getContext('2d');
+
+    const SABER_COLORS = ['#FF0000', '#0000FF'];
+    let cv = window.cv;
+
+    function resize() {
+      const canvases = [webglCanvas, skeletonCanvas, blobCanvas];
+      canvases.forEach(canvas => {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      });
+      gl.viewport(0, 0, webglCanvas.width, webglCanvas.height);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // WebGL Shaders
+    const vertexShaderSource = `
+      attribute vec2 a_position;
+      attribute vec2 a_texCoord;
+      uniform vec2 u_resolution;
+      varying vec2 v_texCoord;
+      void main() {
+        vec2 zeroToOne = a_position / u_resolution;
+        vec2 zeroToTwo = zeroToOne * 2.0;
+        vec2 clipSpace = zeroToTwo - 1.0;
+        gl_Position = vec4(clipSpace * vec2(-1, -1), 0, 1);
+        v_texCoord = vec2(1.0 - a_texCoord.x, a_texCoord.y);
+      }
+    `;
+
+    const fragmentShaderSource = `
+      precision mediump float;
+      uniform sampler2D u_image;
+      uniform vec2 u_handPosition[21];
+      uniform float u_handInfluence[21];
+      varying vec2 v_texCoord;
+
+      float gaussianFalloff(float distance, float radius) {
+        return exp(-distance * distance / (2.0 * radius * radius));
+      }
+
+      void main() {
+        vec2 position = v_texCoord;
+        float totalEffect = 0.0;
+        float effectRadius = 0.2;
+        
+        for(int i = 0; i < 21; i++) {
+          vec2 handPos = u_handPosition[i];
+          vec2 diff = handPos - position;
+          float distance = length(diff);
+          float falloff = gaussianFalloff(distance, effectRadius);
+          
+          if(falloff > 0.01) {
+            float strength = u_handInfluence[i] * falloff;
+            position -= normalize(diff) * strength * 0.02;
+            totalEffect += falloff;
+          }
+        }
+
+        vec2 finalPosition = mix(v_texCoord, position, min(1.0, totalEffect));
+        gl_FragColor = texture2D(u_image, finalPosition);
+      }
+    `;
+
+    // Initialize WebGL
+    function createShader(gl, type, source) {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      return shader;
+    }
+
+    const program = gl.createProgram();
+    const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+    gl.attachShader(program, vertexShader);
+    gl.attachShader(program, fragmentShader);
+    gl.linkProgram(program);
+    gl.useProgram(program);
+
+    const positionBuffer = gl.createBuffer();
+    const texCoordBuffer = gl.createBuffer();
+    const positionLocation = gl.getAttribLocation(program, 'a_position');
+    const texCoordLocation = gl.getAttribLocation(program, 'a_texCoord');
+    const resolutionLocation = gl.getUniformLocation(program, 'u_resolution');
+    const imageLocation = gl.getUniformLocation(program, 'u_image');
+    const handPositionLocation = gl.getUniformLocation(program, 'u_handPosition');
+    const handInfluenceLocation = gl.getUniformLocation(program, 'u_handInfluence');
+
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+    // Blob Detection Function
+    function detectBlobs(frame) {
+      let src = new cv.Mat(frame.height, frame.width, cv.CV_8UC4);
+      let hsv = new cv.Mat();
+      let redMask1 = new cv.Mat();
+      let redMask2 = new cv.Mat();
+      let blueMask = new cv.Mat();
+      let contours = new cv.MatVector();
+      let hierarchy = new cv.Mat();
+      
+      src.data.set(frame.data);
+      cv.cvtColor(src, hsv, cv.COLOR_BGR2HSV);
+      
+      cv.inRange(hsv, new cv.Mat(1, 1, cv.CV_8UC3, [0, 100, 100, 255]), 
+                     new cv.Mat(1, 1, cv.CV_8UC3, [10, 255, 255, 255]), redMask1);
+      cv.inRange(hsv, new cv.Mat(1, 1, cv.CV_8UC3, [160, 100, 100, 255]), 
+                     new cv.Mat(1, 1, cv.CV_8UC3, [180, 255, 255, 255]), redMask2);
+      cv.inRange(hsv, new cv.Mat(1, 1, cv.CV_8UC3, [100, 100, 100, 255]), 
+                     new cv.Mat(1, 1, cv.CV_8UC3, [140, 255, 255, 255]), blueMask);
+      
+      let mask = new cv.Mat();
+      cv.add(redMask1, redMask2, mask);
+      cv.add(mask, blueMask, mask);
+      
+      cv.findContours(mask, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+      
+      let blobs = [];
+      for (let i = 0; i < contours.size(); ++i) {
+        let rect = cv.boundingRect(contours.get(i));
+        if (rect.width > 10 && rect.height > 10) {
+          let centerHsv = hsv.ucharPtr(rect.y + rect.height/2, rect.x + rect.width/2);
+          let color = centerHsv[0] < 20 || centerHsv[0] > 160 ? 'red' : 'blue';
+          blobs.push({...rect, color});
+        }
+      }
+      
+      [src, hsv, redMask1, redMask2, blueMask, mask, contours, hierarchy].forEach(m => m.delete());
+      
+      return blobs;
+    }
+
+    function onResults(results) {
+      // WebGL rendering for liquify effect
+      gl.bindTexture(gl.TEXTURE_2D, texture);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, results.image);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        0, 0,
+        webglCanvas.width, 0,
+        0, webglCanvas.height,
+        0, webglCanvas.height,
+        webglCanvas.width, 0,
+        webglCanvas.width, webglCanvas.height,
+      ]), gl.STATIC_DRAW);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        1.0, 0.0,
+        0.0, 0.0,
+        1.0, 1.0,
+        1.0, 1.0,
+        0.0, 0.0,
+        0.0, 1.0,
+      ]), gl.STATIC_DRAW);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      gl.enableVertexAttribArray(positionLocation);
+      gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+      gl.enableVertexAttribArray(texCoordLocation);
+      gl.vertexAttribPointer(texCoordLocation, 2, gl.FLOAT, false, 0, 0);
+
+      gl.uniform2f(resolutionLocation, webglCanvas.width, webglCanvas.height);
+      gl.uniform1i(imageLocation, 0);
+
+      const handPositions = new Float32Array(42);
+      const handInfluence = new Float32Array(21);
+
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        results.multiHandLandmarks.forEach((handLandmarks) => {
+          handLandmarks.forEach((landmark, i) => {
+            handPositions[i * 2] = landmark.x;
+            handPositions[i * 2 + 1] = landmark.y;
+            handInfluence[i] = 1.0;
+          });
+        });
+      }
+
+      gl.uniform2fv(handPositionLocation, handPositions);
+      gl.uniform1fv(handInfluenceLocation, handInfluence);
+
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+      // Skeleton rendering
+      skeletonCtx.clearRect(0, 0, skeletonCanvas.width, skeletonCanvas.height);
+      
+      if (results.multiHandLandmarks) {
+        skeletonCtx.save();
+        skeletonCtx.scale(-1, 1);
+        skeletonCtx.translate(-skeletonCanvas.width, 0);
+        
+        results.multiHandLandmarks.forEach((landmarks, index) => {
+          // Draw hand skeleton
+          drawConnectors(skeletonCtx, landmarks, HAND_CONNECTIONS,
+            {color: '#00FF00', lineWidth: 5});
+          drawLandmarks(skeletonCtx, landmarks, {color: '#FF0000', lineWidth: 2});
+
+          // Draw lightsaber
+          const wrist = landmarks[0];
+          const middleFinger = landmarks[9];
+          const angle = Math.atan2(
+            middleFinger.y - wrist.y,
+            middleFinger.x - wrist.x
+          );
+
+          skeletonCtx.save();
+          skeletonCtx.translate(wrist.x * skeletonCanvas.width, wrist.y * skeletonCanvas.height);
+          skeletonCtx.rotate(angle - Math.PI/2);
+
+          const saberColor = SABER_COLORS[index % SABER_COLORS.length];
+
+          skeletonCtx.beginPath();
+          skeletonCtx.moveTo(0, 0);
+          skeletonCtx.lineTo(0, -300);
+          skeletonCtx.strokeStyle = saberColor;
+          skeletonCtx.lineWidth = 15;
+          skeletonCtx.lineCap = 'round';
+          skeletonCtx.shadowColor = saberColor;
+          skeletonCtx.shadowBlur = 20;
+          skeletonCtx.stroke();
+
+          skeletonCtx.beginPath();
+          skeletonCtx.moveTo(0, 0);
+          skeletonCtx.lineTo(0, 50);
+          skeletonCtx.strokeStyle = '#808080';
+          skeletonCtx.lineWidth = 10;
+          skeletonCtx.shadowBlur = 0;
+          skeletonCtx.stroke();
+
+          skeletonCtx.restore();
+        });
+        
+        skeletonCtx.restore();
+      }
+
+      // Blob detection
+      blobCtx.drawImage(results.image, 0, 0, blobCanvas.width, blobCanvas.height);
+      let imageData = blobCtx.getImageData(0, 0, blobCanvas.width, blobCanvas.height);
+      let blobs = detectBlobs(imageData);
+      
+      skeletonCtx.save();
+      skeletonCtx.scale(-1, 1);
+      skeletonCtx.translate(-skeletonCanvas.width, 0);
+
+      blobs.forEach(rect => {
+        skeletonCtx.strokeStyle = rect.color === 'red' ? '#FF0000' : '#0000FF';
+        skeletonCtx.lineWidth = 2;
+        skeletonCtx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+        skeletonCtx.fillStyle = rect.color === 'red' ? '#FF0000' : '#0000FF';
+        skeletonCtx.font = '16px Arial';
+        skeletonCtx.fillText(
+          `${rect.color} blob: (${rect.x}, ${rect.y})`,
+          rect.x,
+          rect.y - 5
+        );
+      });
+
+      skeletonCtx.restore();
+    }
+
+    const hands = new Hands({
+      locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+      }
+    });
+
+    hands.setOptions({
+      maxNumHands: 2,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+
+    hands.onResults(onResults);
+
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await hands.send({image: videoElement});
+      },
+      width: 1280,
+      height: 720
+    });
+
+    // Wait for OpenCV.js to be ready
+    cv['onRuntimeInitialized'] = function() {
+      camera.start();
+    };
+  </script>
+</body>
+</html>
