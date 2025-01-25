@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script src="https://docs.opencv.org/4.7.0/opencv.js"></script>
+  <style>
+    body { margin: 0; }
+    #output_canvas { 
+      position: fixed;
+      width: 100vw;
+      height: 100vh;
+      background: black;
+    }
+    #video, #blob_canvas {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <video id="video" width="1280" height="720"></video>
+  <canvas id="output_canvas"></canvas>
+  <canvas id="blob_canvas"></canvas>
+
+  <script>
+    const videoElement = document.getElementById('video');
+    const canvasElement = document.getElementById('output_canvas');
+    const blobCanvas = document.getElementById('blob_canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    const blobCtx = blobCanvas.getContext('2d');
+
+    const SABER_COLORS = ['#FF0000', '#0000FF'];
+    let cv = window.cv;
+
+    function detectBlobs(frame) {
+      let src = new cv.Mat(frame.height, frame.width, cv.CV_8UC4);
+      let hsv = new cv.Mat();
+      let redMask1 = new cv.Mat();
+      let redMask2 = new cv.Mat();
+      let blueMask = new cv.Mat();
+      let contours = new cv.MatVector();
+      let hierarchy = new cv.Mat();
+      
+      // Convert frame to OpenCV matrix and HSV
+      src.data.set(frame.data);
+      cv.cvtColor(src, hsv, cv.COLOR_BGR2HSV);
+      
+      // Red has two ranges in HSV
+      cv.inRange(hsv, new cv.Mat(1, 1, cv.CV_8UC3, [0, 100, 100, 255]), 
+                     new cv.Mat(1, 1, cv.CV_8UC3, [10, 255, 255, 255]), redMask1);
+      cv.inRange(hsv, new cv.Mat(1, 1, cv.CV_8UC3, [160, 100, 100, 255]), 
+                     new cv.Mat(1, 1, cv.CV_8UC3, [180, 255, 255, 255]), redMask2);
+      
+      // Blue range
+      cv.inRange(hsv, new cv.Mat(1, 1, cv.CV_8UC3, [100, 100, 100, 255]), 
+                     new cv.Mat(1, 1, cv.CV_8UC3, [140, 255, 255, 255]), blueMask);
+      
+      // Combine masks
+      let mask = new cv.Mat();
+      cv.add(redMask1, redMask2, mask);
+      cv.add(mask, blueMask, mask);
+      
+      // Find contours
+      cv.findContours(mask, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+      
+      let blobs = [];
+      for (let i = 0; i < contours.size(); ++i) {
+        let rect = cv.boundingRect(contours.get(i));
+        // Check if blob is large enough
+        if (rect.width > 10 && rect.height > 10) {
+          let centerHsv = hsv.ucharPtr(rect.y + rect.height/2, rect.x + rect.width/2);
+          let color = centerHsv[0] < 20 || centerHsv[0] > 160 ? 'red' : 'blue';
+          blobs.push({...rect, color});
+        }
+      }
+      
+      // Clean up
+      src.delete();
+      hsv.delete();
+      redMask1.delete();
+      redMask2.delete();
+      blueMask.delete();
+      mask.delete();
+      contours.delete();
+      hierarchy.delete();
+      
+      return blobs;
+    }
+
+    function onResults(results) {
+      canvasElement.width = window.innerWidth;
+      canvasElement.height = window.innerHeight;
+      blobCanvas.width = canvasElement.width;
+      blobCanvas.height = canvasElement.height;
+
+      canvasCtx.save();
+      canvasCtx.scale(-1, 1);
+      canvasCtx.translate(-canvasElement.width, 0);
+      canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+      // Copy frame for blob detection
+      blobCtx.drawImage(results.image, 0, 0, blobCanvas.width, blobCanvas.height);
+      let imageData = blobCtx.getImageData(0, 0, blobCanvas.width, blobCanvas.height);
+      
+      // Detect blobs
+      let blobs = detectBlobs(imageData);
+      
+      // Draw blob rectangles
+      blobs.forEach((rect, index) => {
+        canvasCtx.strokeStyle = rect.color === 'red' ? '#FF0000' : '#0000FF';
+        canvasCtx.lineWidth = 2;
+        canvasCtx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+        canvasCtx.fillStyle = rect.color === 'red' ? '#FF0000' : '#0000FF';
+        canvasCtx.font = '16px Arial';
+        canvasCtx.fillText(
+          `${rect.color} saber: (${rect.x}, ${rect.y})`,
+          rect.x,
+          rect.y - 5
+        );
+      });
+
+      if (results.multiHandLandmarks) {
+        results.multiHandLandmarks.forEach((landmarks, index) => {
+          drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS,
+            {color: '#00FF00', lineWidth: 5});
+          drawLandmarks(canvasCtx, landmarks, {color: '#FF0000', lineWidth: 2});
+
+          const wrist = landmarks[0];
+          const screenX = wrist.x * canvasElement.width;
+          const screenY = wrist.y * canvasElement.height;
+
+          const middleFinger = landmarks[9];
+          const angle = Math.atan2(
+            middleFinger.y - wrist.y,
+            middleFinger.x - wrist.x
+          );
+
+          canvasCtx.save();
+          canvasCtx.translate(screenX, screenY);
+          canvasCtx.rotate(angle - Math.PI/2);
+
+          const saberColor = SABER_COLORS[index % SABER_COLORS.length];
+
+          canvasCtx.beginPath();
+          canvasCtx.moveTo(0, 0);
+          canvasCtx.lineTo(0, -300);
+          canvasCtx.strokeStyle = saberColor;
+          canvasCtx.lineWidth = 15;
+          canvasCtx.lineCap = 'round';
+          canvasCtx.shadowColor = saberColor;
+          canvasCtx.shadowBlur = 20;
+          canvasCtx.stroke();
+
+          canvasCtx.beginPath();
+          canvasCtx.moveTo(0, 0);
+          canvasCtx.lineTo(0, 50);
+          canvasCtx.strokeStyle = '#808080';
+          canvasCtx.lineWidth = 10;
+          canvasCtx.shadowBlur = 0;
+          canvasCtx.stroke();
+
+          canvasCtx.restore();
+        });
+      }
+      canvasCtx.restore();
+    }
+
+    const hands = new Hands({
+      locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+      }
+    });
+
+    hands.setOptions({
+      maxNumHands: 2,
+      modelComplexity: 1,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+
+    hands.onResults(onResults);
+
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await hands.send({image: videoElement});
+      },
+      width: 1280,
+      height: 720
+    });
+
+    // Wait for OpenCV.js to be ready
+    cv['onRuntimeInitialized'] = function() {
+      camera.start();
+    };
+  </script>
+</body>
+</html>
