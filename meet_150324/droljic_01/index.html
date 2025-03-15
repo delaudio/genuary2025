@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Three.js Particle System</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background-color: #000;
+      }
+    </style>
+  </head>
+  <body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+      let scene, camera, renderer;
+      let particles, particleSystem;
+      let mouseX = 0,
+        mouseY = 0;
+      let windowHalfX = window.innerWidth / 2;
+      let windowHalfY = window.innerHeight / 2;
+      let cameraTargetX = 0;
+      let cameraTargetY = 0;
+
+      const particleCount = 5000;
+      const particleDistance = 300;
+      const dampingFactor = 0.98;
+      const cameraDamping = 0.02; // Reduced from 0.05 to 0.02 for slower camera movement
+
+      // Add color constants
+      const defaultColor = 0xffffff;
+      const blueColor = 0x0000ff;
+      const redColor = 0xff0000;
+
+      init();
+      animate();
+
+      function init() {
+        // Create scene
+        scene = new THREE.Scene();
+
+        // Create camera
+        camera = new THREE.PerspectiveCamera(
+          75,
+          window.innerWidth / window.innerHeight,
+          1,
+          3000
+        );
+        camera.position.z = 1000;
+
+        // Create particle material
+        const particleMaterial = new THREE.PointsMaterial({
+          color: 0xffffff,
+          size: 3,
+          transparent: true,
+          blending: THREE.AdditiveBlending,
+          sizeAttenuation: true,
+        });
+
+        // Create particles
+        const particlesGeometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(particleCount * 3);
+        const velocities = new Float32Array(particleCount * 3);
+
+        for (let i = 0; i < particleCount; i++) {
+          const i3 = i * 3;
+
+          // Position
+          positions[i3] = (Math.random() * 2 - 1) * particleDistance;
+          positions[i3 + 1] = (Math.random() * 2 - 1) * particleDistance;
+          positions[i3 + 2] = (Math.random() * 2 - 1) * particleDistance;
+
+          // Velocity
+          velocities[i3] = (Math.random() * 2 - 1) * 0.2;
+          velocities[i3 + 1] = (Math.random() * 2 - 1) * 0.2;
+          velocities[i3 + 2] = (Math.random() * 2 - 1) * 0.2;
+        }
+
+        particlesGeometry.setAttribute(
+          "position",
+          new THREE.BufferAttribute(positions, 3)
+        );
+        particlesGeometry.setAttribute(
+          "velocity",
+          new THREE.BufferAttribute(velocities, 3)
+        );
+
+        // Create particle system
+        particleSystem = new THREE.Points(particlesGeometry, particleMaterial);
+        scene.add(particleSystem);
+
+        // Create renderer
+        renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Event listeners
+        document.addEventListener("mousemove", onMouseMove, false);
+        document.addEventListener("wheel", onMouseWheel, false);
+        window.addEventListener("resize", onWindowResize, false);
+        document.addEventListener("keydown", onKeyDown, false);
+      }
+
+      function onMouseMove(event) {
+        mouseX = (event.clientX - windowHalfX) * 0.5;
+        mouseY = (event.clientY - windowHalfY) * 0.5;
+        cameraTargetX = mouseX * 0.3; // Reduced from 2 to 0.3 for much less camera movement
+        cameraTargetY = mouseY * 0.3;
+      }
+
+      function onMouseWheel(event) {
+        // Zoom camera in and out based on scroll direction
+        const zoomSpeed = 50;
+        camera.position.z += event.deltaY * 0.1; // Adjust zoom sensitivity here
+
+        // Limit how close and far the camera can go
+        camera.position.z = Math.max(100, Math.min(camera.position.z, 2000));
+      }
+
+      function onWindowResize() {
+        windowHalfX = window.innerWidth / 2;
+        windowHalfY = window.innerHeight / 2;
+
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+
+      function onKeyDown(event) {
+        switch(event.key.toLowerCase()) {
+          case 'a':
+            particleSystem.material.color.setHex(blueColor);
+            break;
+          case 's':
+            particleSystem.material.color.setHex(redColor);
+            break;
+          case 'd':
+            particleSystem.material.color.setHex(defaultColor);
+            break;
+        }
+      }
+
+      function animate() {
+        requestAnimationFrame(animate);
+        render();
+      }
+
+      function render() {
+        // Update camera position with damping
+        camera.position.x += (cameraTargetX - camera.position.x) * cameraDamping;
+        camera.position.y += (cameraTargetY - camera.position.y) * cameraDamping;
+
+        // Update particles based on mouse position
+        const positions = particleSystem.geometry.attributes.position.array;
+        const velocities = particleSystem.geometry.attributes.velocity.array;
+
+        for (let i = 0; i < particleCount; i++) {
+          const i3 = i * 3;
+
+          // Apply velocity
+          positions[i3] += velocities[i3];
+          positions[i3 + 1] += velocities[i3 + 1];
+          positions[i3 + 2] += velocities[i3 + 2];
+
+          // Apply mouse influence as acceleration
+          velocities[i3] += mouseX * 0.001;
+          velocities[i3 + 1] -= mouseY * 0.001;
+
+          // Apply damping to velocities
+          velocities[i3] *= dampingFactor;
+          velocities[i3 + 1] *= dampingFactor;
+          velocities[i3 + 2] *= dampingFactor;
+
+          // Boundary check - wrap around if particles go too far
+          if (Math.abs(positions[i3]) > particleDistance) {
+            positions[i3] = -positions[i3] * 0.95;
+          }
+
+          if (Math.abs(positions[i3 + 1]) > particleDistance) {
+            positions[i3 + 1] = -positions[i3 + 1] * 0.95;
+          }
+
+          if (Math.abs(positions[i3 + 2]) > particleDistance) {
+            positions[i3 + 2] = -positions[i3 + 2] * 0.95;
+          }
+        }
+
+        particleSystem.geometry.attributes.position.needsUpdate = true;
+
+        // Rotate the entire system slowly
+        particleSystem.rotation.y += 0.003;
+
+        // Render the scene
+        renderer.render(scene, camera);
+      }
+    </script>
+  </body>
+</html>
