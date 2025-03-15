@@ -3,43 +3,182 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Three.js Particle System</title>
+    <title>Three.js Visualization Controlled by Ableton Live</title>
     <style>
       body {
         margin: 0;
         overflow: hidden;
         background-color: #000;
+        font-family: Arial, sans-serif;
+      }
+      #info {
+        position: absolute;
+        top: 10px;
+        width: 100%;
+        text-align: center;
+        color: white;
+        font-size: 14px;
+        pointer-events: none;
+        z-index: 100;
+        text-shadow: 1px 1px 1px rgba(0, 0, 0, 0.5);
+      }
+      #osc-data {
+        position: absolute;
+        bottom: 10px;
+        left: 10px;
+        color: white;
+        background-color: rgba(0, 0, 0, 0.5);
+        padding: 10px;
+        border-radius: 5px;
+        font-family: monospace;
+        font-size: 12px;
+        pointer-events: none;
+        z-index: 100;
       }
     </style>
   </head>
   <body>
+    <div id="info">Particle System Controlled by Ableton Live via OSC</div>
+    <div id="osc-data">Waiting for OSC data from Ableton Live...</div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.min.js"></script>
     <script>
+      // OSC data display element
+      const oscDataElement = document.getElementById("osc-data");
+
+      // Connection to the OSC bridge server
+      let socket;
+
+      // OSC data variables that will control our visualization
+      let oscParam1 = 0.5; // Default value for parameter 1 (could control particle speed)
+      let oscParam2 = 0.5; // Default value for parameter 2 (could control particle size)
+      let oscParam3 = 0.5; // Default value for parameter 3 (could control color)
+      let oscParam4 = 0; // Default value for parameter 4 (could trigger events)
+      
+      // Target values for smooth interpolation
+      let targetOscParam1 = 0.5;
+      let targetOscParam2 = 0.5;
+      let targetOscParam3 = 0.5;
+      let targetOscParam4 = 0;
+      
+      // Smoothing factor (lower = smoother but slower)
+      const smoothingFactor = 0.05;
+      
+      // Debounce timer
+      let oscUpdateTimer = null;
+      const debounceTime = 16; // ~60fps in milliseconds
+
+      // Value smoothing function
+      function smoothValue(current, target, factor) {
+        return current + (target - current) * factor;
+      }
+
+      let showParticles = true; // Toggle between particles and grid
+
+      try {
+        socket = io("http://localhost:3000");
+
+        socket.on("connect", () => {
+          console.log("Connected to OSC bridge server");
+          oscDataElement.innerHTML =
+            "Connected to OSC bridge server. Waiting for data...";
+        });
+
+        socket.on("connect_error", (err) => {
+          console.error("Connection error:", err);
+          oscDataElement.innerHTML =
+            "Error connecting to OSC bridge server. Is it running?";
+        });
+
+        // Handle incoming OSC data from Ableton Live with debouncing
+        socket.on("osc-data", (data) => {
+          if (oscUpdateTimer) {
+            clearTimeout(oscUpdateTimer);
+          }
+
+          oscUpdateTimer = setTimeout(() => {
+            console.log("Received OSC data:", data);
+
+            // Update the OSC data display
+            oscDataElement.innerHTML = `
+              OSC Address: ${data.address}<br>
+              Values: ${data.args.join(", ")}
+            `;
+
+            console.log("data.address", data.args);
+
+            // Process different OSC messages based on their address pattern
+            if (data.address === "/ableton/param1" && data.args.length > 0) {
+              targetOscParam1 = data.args[0];
+            } else if (data.address === "/ableton/param2" && data.args.length > 0) {
+              targetOscParam2 = data.args[0];
+            } else if (data.address === "/ableton/param3" && data.args.length > 0) {
+              targetOscParam3 = data.args[0];
+            } else if (data.address === "/ableton/param4" && data.args.length > 0) {
+              targetOscParam4 = data.args[0];
+            } else if (data.address === "/ableton/toggle" && data.args.length > 0) {
+              showParticles = data.args[0] > 0.5;
+              particleSystem.visible = showParticles;
+              gridMesh.visible = !showParticles;
+            } else if (data.address === "/ableton/color" && data.args.length >= 3) {
+              // Set color based on RGB values (assuming 0-1 range)
+              const r = Math.floor(data.args[0] * 255);
+              const g = Math.floor(data.args[1] * 255);
+              const b = Math.floor(data.args[2] * 255);
+              const color = (r << 16) | (g << 8) | b;
+
+              particleSystem.material.color.setHex(color);
+              particleSystem.material.emissive.setHex(color);
+              gridMesh.material.color.setHex(color);
+              gridMesh.material.emissive.setHex(color);
+            } else if (data.address === "/ableton/beat" && data.args.length > 0) {
+              // Flash pulse on beat detection or transport
+              const beatIntensity = data.args[0];
+              // Create a quick pulse effect
+              const currentPulse = pulseValue;
+              pulseValue = Math.min(1.0, currentPulse + beatIntensity * 0.5);
+            }
+          }, debounceTime);
+        });
+      } catch (err) {
+        console.error("Socket.io initialization error:", err);
+      }
+
       let scene, camera, renderer;
-      let particles, particleSystem;
-      let mouseX = 0,
-        mouseY = 0;
-      let windowHalfX = window.innerWidth / 2;
-      let windowHalfY = window.innerHeight / 2;
+      let particleSystem, gridMesh;
       let cameraTargetX = 0;
       let cameraTargetY = 0;
+      let pointLight;
+      let pulseValue = 0.5;
 
       const particleCount = 5000;
       const particleDistance = 300;
       const dampingFactor = 0.98;
-      const cameraDamping = 0.02; // Reduced from 0.05 to 0.02 for slower camera movement
+      const cameraDamping = 0.02;
 
-      // Add color constants
-      const defaultColor = 0xffffff;
-      const blueColor = 0x0000ff;
-      const redColor = 0xff0000;
+      // Grid parameters
+      const gridSize = 32;
+      const gridSegments = 32;
+
+      // Color constants
+      const defaultColor = 0x80d0ff;
+      const blueColor = 0x0080ff;
+      const redColor = 0xff4040;
+
+      // Arrays to store particle data
+      const positions = [];
+      const velocities = [];
+      const gridVertices = [];
+      const gridVelocities = [];
 
       init();
       animate();
 
       function init() {
-        // Create scene
+        // Create scene with dark blue background
         scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x080820);
 
         // Create camera
         camera = new THREE.PerspectiveCamera(
@@ -50,151 +189,294 @@
         );
         camera.position.z = 1000;
 
-        // Create particle material
-        const particleMaterial = new THREE.PointsMaterial({
-          color: 0xffffff,
-          size: 3,
-          transparent: true,
-          blending: THREE.AdditiveBlending,
-          sizeAttenuation: true,
-        });
+        // Add lights
+        const ambientLight = new THREE.AmbientLight(0x6080a0, 1.5);
+        scene.add(ambientLight);
 
-        // Create particles
-        const particlesGeometry = new THREE.BufferGeometry();
-        const positions = new Float32Array(particleCount * 3);
-        const velocities = new Float32Array(particleCount * 3);
+        pointLight = new THREE.PointLight(0xefffff, 1.5, 2000);
+        pointLight.position.set(0, 0, 500);
+        scene.add(pointLight);
 
-        for (let i = 0; i < particleCount; i++) {
-          const i3 = i * 3;
+        const secondLight = new THREE.PointLight(0xffeeaa, 1, 2000);
+        secondLight.position.set(-500, 300, 700);
+        scene.add(secondLight);
 
-          // Position
-          positions[i3] = (Math.random() * 2 - 1) * particleDistance;
-          positions[i3 + 1] = (Math.random() * 2 - 1) * particleDistance;
-          positions[i3 + 2] = (Math.random() * 2 - 1) * particleDistance;
-
-          // Velocity
-          velocities[i3] = (Math.random() * 2 - 1) * 0.2;
-          velocities[i3 + 1] = (Math.random() * 2 - 1) * 0.2;
-          velocities[i3 + 2] = (Math.random() * 2 - 1) * 0.2;
-        }
-
-        particlesGeometry.setAttribute(
-          "position",
-          new THREE.BufferAttribute(positions, 3)
+        const hemisphereLight = new THREE.HemisphereLight(
+          0xaaceff,
+          0x102040,
+          1.2
         );
-        particlesGeometry.setAttribute(
-          "velocity",
-          new THREE.BufferAttribute(velocities, 3)
-        );
+        scene.add(hemisphereLight);
 
         // Create particle system
-        particleSystem = new THREE.Points(particlesGeometry, particleMaterial);
-        scene.add(particleSystem);
+        initParticleSystem();
+
+        // Create grid mesh
+        initGridMesh();
+
+        // Set initial visibility
+        gridMesh.visible = !showParticles;
+        particleSystem.visible = showParticles;
 
         // Create renderer
-        renderer = new THREE.WebGLRenderer();
+        renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
         // Event listeners
-        document.addEventListener("mousemove", onMouseMove, false);
-        document.addEventListener("wheel", onMouseWheel, false);
         window.addEventListener("resize", onWindowResize, false);
-        document.addEventListener("keydown", onKeyDown, false);
       }
 
-      function onMouseMove(event) {
-        mouseX = (event.clientX - windowHalfX) * 0.5;
-        mouseY = (event.clientY - windowHalfY) * 0.5;
-        cameraTargetX = mouseX * 0.3; // Reduced from 2 to 0.3 for much less camera movement
-        cameraTargetY = mouseY * 0.3;
+      function initParticleSystem() {
+        // Create geometry for individual particles
+        const sphereGeometry = new THREE.SphereGeometry(2, 8, 8);
+
+        // Using MeshStandardMaterial with transparency
+        const particleMaterial = new THREE.MeshStandardMaterial({
+          color: defaultColor,
+          metalness: 0.3,
+          roughness: 0.2,
+          transparent: true,
+          opacity: 0.7,
+          emissive: defaultColor,
+          emissiveIntensity: 0.5,
+        });
+
+        // Create instanced mesh
+        particleSystem = new THREE.InstancedMesh(
+          sphereGeometry,
+          particleMaterial,
+          particleCount
+        );
+        scene.add(particleSystem);
+
+        // Initialize particles
+        const matrix = new THREE.Matrix4();
+
+        for (let i = 0; i < particleCount; i++) {
+          // Position
+          const position = new THREE.Vector3(
+            (Math.random() * 2 - 1) * particleDistance,
+            (Math.random() * 2 - 1) * particleDistance,
+            (Math.random() * 2 - 1) * particleDistance
+          );
+
+          // Velocity
+          const velocity = new THREE.Vector3(
+            (Math.random() * 2 - 1) * 0.2,
+            (Math.random() * 2 - 1) * 0.2,
+            (Math.random() * 2 - 1) * 0.2
+          );
+
+          // Store position and velocity
+          positions.push(position);
+          velocities.push(velocity);
+
+          // Set initial matrix
+          matrix.setPosition(position.x, position.y, position.z);
+          particleSystem.setMatrixAt(i, matrix);
+        }
+
+        particleSystem.instanceMatrix.needsUpdate = true;
       }
 
-      function onMouseWheel(event) {
-        // Zoom camera in and out based on scroll direction
-        const zoomSpeed = 50;
-        camera.position.z += event.deltaY * 0.1; // Adjust zoom sensitivity here
+      function initGridMesh() {
+        // Create grid geometry
+        const gridGeometry = new THREE.PlaneGeometry(
+          particleDistance * 2,
+          particleDistance * 2,
+          gridSize,
+          gridSize
+        );
 
-        // Limit how close and far the camera can go
-        camera.position.z = Math.max(100, Math.min(camera.position.z, 2000));
+        // Get vertices for manipulation
+        const vertices = gridGeometry.attributes.position.array;
+
+        // Initialize grid vertices and velocities
+        for (let i = 0; i < vertices.length; i += 3) {
+          const position = new THREE.Vector3(
+            vertices[i],
+            vertices[i + 1],
+            vertices[i + 2]
+          );
+
+          const velocity = new THREE.Vector3(
+            (Math.random() * 2 - 1) * 0.1,
+            (Math.random() * 2 - 1) * 0.1,
+            (Math.random() * 2 - 1) * 0.1
+          );
+
+          gridVertices.push(position);
+          gridVelocities.push(velocity);
+        }
+
+        // Using MeshStandardMaterial with transparency
+        const gridMaterial = new THREE.MeshStandardMaterial({
+          color: defaultColor,
+          side: THREE.DoubleSide,
+          wireframe: true,
+          metalness: 0.3,
+          roughness: 0.2,
+          transparent: true,
+          opacity: 0.8,
+          emissive: defaultColor,
+          emissiveIntensity: 0.5,
+        });
+
+        // Create mesh
+        gridMesh = new THREE.Mesh(gridGeometry, gridMaterial);
+        scene.add(gridMesh);
       }
 
       function onWindowResize() {
-        windowHalfX = window.innerWidth / 2;
-        windowHalfY = window.innerHeight / 2;
-
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
-
         renderer.setSize(window.innerWidth, window.innerHeight);
-      }
-
-      function onKeyDown(event) {
-        switch(event.key.toLowerCase()) {
-          case 'a':
-            particleSystem.material.color.setHex(blueColor);
-            break;
-          case 's':
-            particleSystem.material.color.setHex(redColor);
-            break;
-          case 'd':
-            particleSystem.material.color.setHex(defaultColor);
-            break;
-        }
       }
 
       function animate() {
         requestAnimationFrame(animate);
+
+        // Smooth interpolation of OSC parameters
+        oscParam1 = smoothValue(oscParam1, targetOscParam1, smoothingFactor);
+        oscParam2 = smoothValue(oscParam2, targetOscParam2, smoothingFactor);
+        oscParam3 = smoothValue(oscParam3, targetOscParam3, smoothingFactor);
+        oscParam4 = smoothValue(oscParam4, targetOscParam4, smoothingFactor);
+
+        // Decay pulse value for beat visualization
+        pulseValue = Math.max(0.25, pulseValue * 0.95);
+
+        // Apply the smoothed OSC parameters to the camera movement
+        cameraTargetX = (oscParam1 - 0.5) * 200;
+        cameraTargetY = (oscParam2 - 0.5) * 200;
+
+        // Update emissive intensity based on smoothed OSC parameters and pulse
+        if (showParticles) {
+          particleSystem.material.emissiveIntensity = pulseValue * oscParam3;
+        } else {
+          gridMesh.material.emissiveIntensity = pulseValue * oscParam3;
+        }
+
         render();
       }
 
       function render() {
         // Update camera position with damping
-        camera.position.x += (cameraTargetX - camera.position.x) * cameraDamping;
-        camera.position.y += (cameraTargetY - camera.position.y) * cameraDamping;
+        camera.position.x +=
+          (cameraTargetX - camera.position.x) * cameraDamping;
+        camera.position.y +=
+          (cameraTargetY - camera.position.y) * cameraDamping;
 
-        // Update particles based on mouse position
-        const positions = particleSystem.geometry.attributes.position.array;
-        const velocities = particleSystem.geometry.attributes.velocity.array;
+        camera.lookAt(scene.position);
 
-        for (let i = 0; i < particleCount; i++) {
-          const i3 = i * 3;
-
-          // Apply velocity
-          positions[i3] += velocities[i3];
-          positions[i3 + 1] += velocities[i3 + 1];
-          positions[i3 + 2] += velocities[i3 + 2];
-
-          // Apply mouse influence as acceleration
-          velocities[i3] += mouseX * 0.001;
-          velocities[i3 + 1] -= mouseY * 0.001;
-
-          // Apply damping to velocities
-          velocities[i3] *= dampingFactor;
-          velocities[i3 + 1] *= dampingFactor;
-          velocities[i3 + 2] *= dampingFactor;
-
-          // Boundary check - wrap around if particles go too far
-          if (Math.abs(positions[i3]) > particleDistance) {
-            positions[i3] = -positions[i3] * 0.95;
-          }
-
-          if (Math.abs(positions[i3 + 1]) > particleDistance) {
-            positions[i3 + 1] = -positions[i3 + 1] * 0.95;
-          }
-
-          if (Math.abs(positions[i3 + 2]) > particleDistance) {
-            positions[i3 + 2] = -positions[i3 + 2] * 0.95;
-          }
+        // Update particles if visible
+        if (showParticles) {
+          updateParticles();
+        } else {
+          updateGrid();
         }
 
-        particleSystem.geometry.attributes.position.needsUpdate = true;
-
-        // Rotate the entire system slowly
-        particleSystem.rotation.y += 0.003;
-
-        // Render the scene
+        // Render
         renderer.render(scene, camera);
+      }
+
+      function updateParticles() {
+        const matrix = new THREE.Matrix4();
+
+        // Use oscParam1 to control particle speed
+        const particleSpeed = oscParam1 * 2; // Map 0-1 to 0-2
+
+        for (let i = 0; i < particleCount; i++) {
+          const position = positions[i];
+          const velocity = velocities[i];
+
+          // Apply velocity with speed controlled by OSC
+          position.x += velocity.x * particleSpeed;
+          position.y += velocity.y * particleSpeed;
+          position.z += velocity.z * particleSpeed;
+
+          // Use OSC parameters to affect particle movement
+          velocity.x +=
+            (Math.sin(Date.now() * 0.001 + i * 0.1) * oscParam2 - 0.5) * 0.01;
+          velocity.y +=
+            (Math.cos(Date.now() * 0.001 + i * 0.1) * oscParam3 - 0.5) * 0.01;
+
+          // Apply damping
+          velocity.multiplyScalar(dampingFactor);
+
+          // Boundary check
+          if (Math.abs(position.x) > particleDistance) {
+            position.x = -position.x * 0.95;
+          }
+
+          if (Math.abs(position.y) > particleDistance) {
+            position.y = -position.y * 0.95;
+          }
+
+          if (Math.abs(position.z) > particleDistance) {
+            position.z = -position.z * 0.95;
+          }
+
+          // Update matrix
+          matrix.setPosition(position.x, position.y, position.z);
+          particleSystem.setMatrixAt(i, matrix);
+        }
+
+        particleSystem.instanceMatrix.needsUpdate = true;
+
+        // Rotate based on OSC parameter
+        particleSystem.rotation.y += 0.003 * oscParam1;
+        particleSystem.rotation.x += 0.001 * oscParam2;
+      }
+
+      function updateGrid() {
+        const positionAttribute = gridMesh.geometry.attributes.position;
+        const positions = positionAttribute.array;
+
+        // Use OSC parameters to control grid wave parameters
+        const waveSpeed = oscParam1;
+        const waveHeight = oscParam2 * 30; // Amplify the height
+        const waveDensity = oscParam3 * 10;
+
+        // Update grid vertices based on OSC data
+        for (let i = 0; i < gridVertices.length; i++) {
+          const position = gridVertices[i];
+          const velocity = gridVelocities[i];
+
+          // Calculate distance from center for wave effect
+          const distX = Math.abs(position.x);
+          const distY = Math.abs(position.y);
+          const maxDist = Math.sqrt(particleDistance * particleDistance * 2);
+          const normalizedDist =
+            Math.sqrt(distX * distX + distY * distY) / maxDist;
+
+          // Create wave effect controlled by OSC
+          velocity.z +=
+            Math.sin(
+              Date.now() * 0.001 * waveSpeed + normalizedDist * waveDensity
+            ) *
+              waveHeight -
+            position.z * 0.01;
+
+          // Apply damping
+          velocity.multiplyScalar(dampingFactor);
+
+          // Update position
+          position.add(velocity);
+
+          // Update geometry
+          const i3 = i * 3;
+          positions[i3] = position.x;
+          positions[i3 + 1] = position.y;
+          positions[i3 + 2] = position.z;
+        }
+
+        positionAttribute.needsUpdate = true;
+
+        // Rotate based on OSC parameters
+        gridMesh.rotation.y += 0.003 * oscParam1;
+        gridMesh.rotation.x += 0.001 * oscParam2;
       }
     </script>
   </body>
